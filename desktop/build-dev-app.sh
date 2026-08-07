@@ -12,10 +12,10 @@
 #   - 不注入版本号/渠道/证书/notarization;ad-hoc 签名,仅本机可运行
 #
 # 用法:
-#   ./build-dev-app.sh            构建(前端 dist 已存在则跳过)
-#   ./build-dev-app.sh --frontend 强制重建前端(改了 TS/样式时用)
+#   ./build-dev-app.sh            构建(前端 dist 缺失或源码有更新时自动构建)
+#   ./build-dev-app.sh --frontend 强制重建前端(检测到变更会自动构建,一般用不到)
 #   ./build-dev-app.sh --install  构建后直接替换 /Applications(可写则免 sudo)
-#   参数可组合,如:./build-dev-app.sh --frontend --install
+#   参数可组合,如:./build-dev-app.sh --install
 #
 # 安全说明:--install 会退出运行中的 Reasonix 并替换 /Applications 下的 app,
 # 因此必须在系统终端(Terminal.app / iTerm 等)里执行,不能在 Reasonix
@@ -65,12 +65,33 @@ can_write_applications() {
   return 1
 }
 
-# 1. 前端 dist(缺失或 --frontend 时构建;wails build 带 -s 跳过前端)
-if [ "$FRONTEND" = 1 ] || [ ! -d frontend/dist ]; then
-  echo "==> 构建前端 frontend/dist ..."
+# 前端是否需要构建:dist 缺失,或任一构建输入(源码/配置/静态资源/lock 文件)
+# 比 dist 的 index.html 新 → 需要。dist、node_modules、sourcemaps(构建产物
+# 归档)、wailsjs(wails build 每次重写 runtime,但 -skipbindings 下内容稳定;
+# 若 wails 升级导致 runtime 变化,用 --frontend 强制重建)不参与比较。
+needs_frontend_build() {
+  local marker=frontend/dist/index.html
+  [ ! -f "$marker" ] && return 0
+  local newer
+  newer=$(find frontend \
+    -path frontend/dist -prune -o \
+    -path frontend/node_modules -prune -o \
+    -path frontend/sourcemaps -prune -o \
+    -path frontend/wailsjs -prune -o \
+    -path frontend/src/__tests__ -prune -o \
+    -type f -newer "$marker" -print 2>/dev/null | head -1)
+  [ -n "$newer" ]
+}
+
+# 1. 前端 dist:缺失、源码有更新或 --frontend 时构建(wails build 带 -s 跳过前端)
+if [ "$FRONTEND" = 1 ]; then
+  echo "==> --frontend 强制重建前端 frontend/dist ..."
+  (cd frontend && pnpm build)
+elif needs_frontend_build; then
+  echo "==> 检测到前端源码更新,构建 frontend/dist ..."
   (cd frontend && pnpm build)
 else
-  echo "==> 前端 dist 已存在,跳过 pnpm build(--frontend 可强制重建)"
+  echo "==> 前端 dist 已是最新,跳过 pnpm build(--frontend 可强制重建)"
 fi
 
 # 2. 标准 wails build:通过 go workspace 调用 Wails CLI(与发布构建同一套增强版
