@@ -13,6 +13,7 @@ import {
   promptHistoryDirectionFromEvent,
   type PromptHistoryDirection,
 } from "../lib/composerKeyboard";
+import { isImeKeyEvent } from "../lib/imeComposition";
 import { resetCustomShortcuts, saveCustomShortcut } from "../lib/keyboardShortcuts";
 import type { ComposerInvocation } from "../lib/invocationDisplay";
 
@@ -161,6 +162,13 @@ eq(
   JSON.stringify([["first", 0], ["second", 1]]),
   "custom newline stays after the invocation at the caret boundary",
 );
+
+console.log("\nisImeKeyEvent");
+eq(isImeKeyEvent({ nativeEvent: {} }, true, 0), true, "active composition counts as IME");
+eq(isImeKeyEvent({ nativeEvent: { isComposing: true } }, false, 0), true, "isComposing flag counts as IME");
+eq(isImeKeyEvent({ nativeEvent: { keyCode: 229 } }, false, 0), true, "keyCode 229 counts as IME");
+eq(isImeKeyEvent({ nativeEvent: { keyCode: 13 } }, false, Date.now()), true, "confirm Enter within the grace window counts as IME");
+eq(isImeKeyEvent({ nativeEvent: { keyCode: 13 } }, false, Date.now() - 1000), false, "a later plain Enter does not count as IME");
 
 console.log(`\n${passed} passed, ${failed} failed, ${passed + failed} total`);
 if (failed > 0) process.exit(1);

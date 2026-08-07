@@ -6,9 +6,10 @@ import { filterAtMatches } from "../lib/atMatches";
 import { DedupIndex, sha256 } from "../lib/attachDedup";
 import { app, onFilesDropped } from "../lib/bridge";
 import { enqueueInboxGuidance } from "../lib/inboxSubmit";
-import { canUsePromptHistory, composerEnterAction, composerEscapeAction, composerMenuKeyAction, insertComposerNewline, isFnKeyEvent, isImeKeyEvent, promptHistoryDirectionFromEvent } from "../lib/composerKeyboard";
+import { canUsePromptHistory, composerEnterAction, composerEscapeAction, composerMenuKeyAction, insertComposerNewline, isFnKeyEvent, promptHistoryDirectionFromEvent } from "../lib/composerKeyboard";
 import { cacheGeneration, loadOlder } from "../lib/composerHistory";
 import { SPINNER_WORDS, useI18n, type Translator } from "../lib/i18n";
+import { isImeKeyEvent, useImeCompositionGuard } from "../lib/imeComposition";
 import { detectShortcutPlatform, formatShortcutCombo, isReservedComposerHistoryShortcut, matchesShortcut, useShortcutComboLabel } from "../lib/keyboardShortcuts";
 import { fallbackCopyText } from "../lib/clipboard";
 import {
@@ -747,8 +748,7 @@ export function Composer({
   const profileHoverTimerRef = useRef<number | null>(null);
   const creationChrome = showContextWindowRing;
   const wasRunningByDraftRef = useRef<Record<string, boolean>>({ [draftKey]: running });
-  const composingRef = useRef(false);
-  const lastCompositionEndAt = useRef(0);
+  const { composingRef, lastCompositionEndAt } = useImeCompositionGuard(taRef, invocations.length === 0);
   const pastChatSearchComposingRef = useRef(false);
   const pastChatSearchLastCompositionEndAt = useRef(0);
   const lastSelectionRef = useRef({ start: 0, end: 0 });
@@ -3305,7 +3305,7 @@ export function Composer({
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement | HTMLDivElement>) => {
-    const composing = isImeKeyEvent(e.nativeEvent, composingRef.current, lastCompositionEndAt.current);
+    const composing = isImeKeyEvent(e, composingRef.current, lastCompositionEndAt.current);
     const native = e.nativeEvent as globalThis.KeyboardEvent & {
       keyCode?: number;
       which?: number;
@@ -3319,7 +3319,10 @@ export function Composer({
       which: native.which,
     });
 
-    if (e.key === "Enter" && composing) return;
+    if (e.key === "Enter" && composing) {
+      e.preventDefault();
+      return;
+    }
     if (fnKey) return;
 
     if (isPasteShortcut(e) && !composing) {
@@ -3568,7 +3571,7 @@ export function Composer({
   // so the user can type a search query.
   const onPastChatSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     const composing = isImeKeyEvent(
-      e.nativeEvent,
+      e,
       pastChatSearchComposingRef.current,
       pastChatSearchLastCompositionEndAt.current,
     );
@@ -4576,13 +4579,6 @@ export function Composer({
                   onContextMenu={openInputMenu}
                   onPaste={onPaste}
                   onKeyDown={onKeyDown}
-                  onCompositionStart={() => {
-                    composingRef.current = true;
-                  }}
-                  onCompositionEnd={() => {
-                    composingRef.current = false;
-                    lastCompositionEndAt.current = Date.now();
-                  }}
                   style={textareaStyle}
                   placeholder={composerPlaceholder}
                   rows={1}

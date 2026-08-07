@@ -195,6 +195,16 @@ function dispatchPasteText(input: HTMLElement, text: string) {
   input.dispatchEvent(event);
 }
 
+function composerEnterEvent(init: KeyboardEventInit = {}): KeyboardEvent {
+  return new window.KeyboardEvent("keydown", {
+    key: "Enter",
+    code: "Enter",
+    bubbles: true,
+    cancelable: true,
+    ...init,
+  });
+}
+
 function nativeFileDropEvent(): Event {
   const drop = new window.Event("drop", { bubbles: true, cancelable: true });
   Object.defineProperty(drop, "dataTransfer", {
@@ -2551,6 +2561,70 @@ console.log("\ncomposer goal toggle");
     root.unmount();
   });
   globalThis.requestAnimationFrame = realRequestAnimationFrame;
+  dom.window.close();
+}
+
+{
+  // WebKit fires compositionend before the confirming Enter keydown, so that
+  // keydown reports isComposing=false with a real keyCode of 13 — the classic
+  // IME-mistaken-for-send case. The plain textarea guard must swallow it.
+  const dom = installDom();
+  mockApp({
+    Commands: async () => [
+      { name: "superpowers:writing-plans", description: "Write a plan", kind: "skill", plugin: "superpowers" },
+    ],
+    ListDirForTab: async () => [],
+    SearchFileRefsForTab: async () => [],
+  });
+  const { root, calls, rerender } = await renderComposer();
+  await replaceComposerDraft(rerender, 6000, "nihao");
+  const imeTextarea = document.querySelector("textarea") as HTMLTextAreaElement | null;
+  if (!imeTextarea) throw new Error("composer textarea did not render");
+  // A full IME confirm cycle: Enter while composing, then compositionend
+  // followed by the confirming Enter (the WebKit order). Neither may send.
+  let duringPrevented = false;
+  let confirmEnterDefaultPrevented = false;
+  await act(async () => {
+    imeTextarea.dispatchEvent(new window.Event("compositionstart", { bubbles: true }));
+    const duringEnter = composerEnterEvent();
+    imeTextarea.dispatchEvent(duringEnter);
+    duringPrevented = duringEnter.defaultPrevented;
+    imeTextarea.dispatchEvent(new window.Event("compositionend", { bubbles: true }));
+    const confirmEnter = composerEnterEvent({ isComposing: false });
+    imeTextarea.dispatchEvent(confirmEnter);
+    confirmEnterDefaultPrevented = confirmEnter.defaultPrevented;
+    await flushTimers();
+  });
+  eq(calls.send.length, 0, "neither the in-composition Enter nor the WebKit confirm Enter sends");
+  eq(duringPrevented, true, "Enter during active composition is swallowed");
+  eq(confirmEnterDefaultPrevented, true, "WebKit confirm Enter is swallowed before it can insert a newline");
+
+  // The rich input (invocation present) shares the same guard. The flush lets
+  // the probe-2 confirm grace expire, so the slash pick below is a real Enter.
+  await replaceComposerDraft(rerender, 6001, "/writing-plans");
+  await flushTimers(150);
+  await waitFor("skill menu for the WebKit IME probe", () => Boolean(document.querySelector(".slashmenu")));
+  await act(async () => {
+    imeTextarea.dispatchEvent(composerEnterEvent());
+    await flushTimers();
+  });
+  const richImeInput = document.querySelector(".composer__rich-input") as HTMLDivElement | null;
+  if (!richImeInput) throw new Error("rich composer did not render for the WebKit IME probe");
+  let richConfirmPrevented = false;
+  await act(async () => {
+    richImeInput.dispatchEvent(new window.Event("compositionstart", { bubbles: true }));
+    richImeInput.dispatchEvent(new window.Event("compositionend", { bubbles: true }));
+    const richConfirmEnter = composerEnterEvent({ isComposing: false });
+    richImeInput.dispatchEvent(richConfirmEnter);
+    richConfirmPrevented = richConfirmEnter.defaultPrevented;
+    await flushTimers();
+  });
+  eq(calls.send.length, 0, "WebKit confirm Enter is not a send in the rich input either");
+  eq(richConfirmPrevented, true, "WebKit confirm Enter is swallowed in the rich input too");
+
+  await act(async () => {
+    root.unmount();
+  });
   dom.window.close();
 }
 
