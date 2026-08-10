@@ -40,6 +40,9 @@ func (p *wanderingChatProvider) Stream(context.Context, provider.Request) (<-cha
 // bounds it without truncating the work — the turn ends with one tool-free
 // summary and stays resumable.
 func TestOrdinaryChatTurnStopsAtTheRunBackstop(t *testing.T) {
+	if chatRunRoundLimit == 0 {
+		t.Skip("chat run backstop disabled in this build (chatRunRoundLimit = 0)")
+	}
 	dir := t.TempDir()
 	prov := &wanderingChatProvider{}
 	reg := tool.NewRegistry()

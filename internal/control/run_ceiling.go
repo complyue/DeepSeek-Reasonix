@@ -8,10 +8,11 @@ import (
 )
 
 // chatRunRoundLimit bounds one ordinary chat Run. Crossing it yields one
-// tool-free summary and a resumable pause, so setting it too low costs a
-// "continue" while leaving it unset costs hours.
+// tool-free summary and a resumable pause. 0 disables the default ceiling
+// entirely (the run loop only caps when runMaxSteps > 0), which this
+// personal dev build uses to avoid mid-task pauses.
 const (
-	chatRunRoundLimit = 100
+	chatRunRoundLimit = 0
 	chatRunRoundKey   = "chat model rounds"
 )
 
