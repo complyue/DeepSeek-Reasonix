@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { app } from "../lib/bridge";
-import { useI18n } from "../lib/i18n";
+import { useI18n, type DictKey } from "../lib/i18n";
 import { formatMoneyLocalized } from "../lib/money";
+import { layoutThresholdMarks } from "../lib/thresholdLayout";
 import type { BalanceInfo, ContextInfo, ContextPanelInfo } from "../lib/types";
 import { AnchoredPopover } from "./AnchoredPopover";
 import {
@@ -19,6 +20,13 @@ interface ContextWindowRingProps {
   cacheHitTokens?: number;
   cacheMissTokens?: number;
   balance?: BalanceInfo;
+}
+
+interface ThresholdMark {
+  key: string;
+  pct: number;
+  nameKey: DictKey;
+  hintKey: DictKey;
 }
 
 const RING = 20;
@@ -105,8 +113,6 @@ export function ContextWindowRing({ enabled = true, context, tabId, turnCost, cu
     setOpen(false);
   }, []);
 
-  if (!enabled) return null;
-
   const promptTokens = info?.promptTokens ?? 0;
   const completionTokens = info?.completionTokens ?? 0;
   const reasoningTokens = info?.reasoningTokens ?? 0;
@@ -116,12 +122,33 @@ export function ContextWindowRing({ enabled = true, context, tabId, turnCost, cu
   const turnCacheRate = formatCacheHitRate(turnCacheHit, turnCacheMiss);
   const compactTokens = windowTokens > 0 ? Math.round(windowTokens * compactRatio) : 0;
   const tokensToCompact = compactTokens > used ? compactTokens - used : 0;
+  const allThresholdMarks: ThresholdMark[] = [
+    { key: "soft", pct: Math.round((context?.softRatio ?? 0) * 100), nameKey: "settings.compactionSoft", hintKey: "settings.compactionSoftHint" },
+    { key: "snip", pct: Math.round((context?.snipRatio ?? 0) * 100), nameKey: "settings.compactionSnip", hintKey: "settings.compactionSnipHint" },
+    { key: "compact", pct: compactPct, nameKey: "settings.compactionCompact", hintKey: "settings.compactionCompactHint" },
+    { key: "force", pct: Math.round((context?.forceRatio ?? 0) * 100), nameKey: "settings.compactionForce", hintKey: "settings.compactionForceHint" },
+  ];
+  const thresholdMarks = allThresholdMarks.filter((m) => m.pct > 0);
+  const thresholdsRef = useRef<HTMLDivElement>(null);
+  const [thresholdsW, setThresholdsW] = useState(0);
+  useLayoutEffect(() => {
+    const el = thresholdsRef.current;
+    if (el && el.clientWidth > 0 && el.clientWidth !== thresholdsW) {
+      setThresholdsW(el.clientWidth);
+    }
+  }, [open, thresholdsW, thresholdMarks]);
+  const thresholdLabels = useMemo(() => layoutThresholdMarks(
+    thresholdMarks.map((m) => ({ key: m.key, pct: m.pct, text: `${t(m.nameKey)} ${m.pct}%` })),
+    thresholdsW > 0 ? thresholdsW : 250,
+  ), [thresholdMarks, t, thresholdsW]);
   const ringOffset = RING_C * (1 - usagePct / 100);
   const elapsed = info?.elapsedMs && info.elapsedMs > 0 ? fmtDuration(info.elapsedMs, t) : undefined;
   const sessionCost = info?.sessionCost && info.sessionCost > 0
     ? formatMoneyLocalized(info.sessionCost, info.sessionCurrency, { locale, empty: "dash" })
     : undefined;
   const turnCostLabel = formatMoneyLocalized(turnCost, info?.sessionCurrency || currency, { locale, empty: "dash" });
+
+  if (!enabled) return null;
 
   return (
     <>
@@ -169,9 +196,31 @@ export function ContextWindowRing({ enabled = true, context, tabId, turnCost, cu
                 <span className="context-ring-popover__seg context-ring-popover__seg--reasoning" style={{ width: `${Math.max(0, breakdown.reasoningPct - breakdown.completionPct)}%` }} />
               )}
               <span className="context-ring-popover__seg context-ring-popover__seg--other" style={{ width: `${Math.max(0, breakdown.otherPct - breakdown.reasoningPct)}%` }} />
-              <span className="context-ring-popover__mark context-ring-popover__mark--compact" style={{ left: `${compactPct}%` }} />
-              <span className="context-ring-popover__mark context-ring-popover__mark--attention" style={{ left: `30%` }} />
+              {thresholdMarks.map((m) => (
+                <span
+                  key={m.key}
+                  className={`context-ring-popover__mark context-ring-popover__mark--${m.key}`}
+                  style={{ left: `${m.pct}%` }}
+                  title={`${t(m.nameKey)} · ${m.pct}% — ${t(m.hintKey)}`}
+                />
+              ))}
             </div>
+          </div>
+          <div className="context-ring-popover__thresholds" ref={thresholdsRef}>
+            {thresholdLabels.map((l) => {
+              const m = thresholdMarks.find((mm) => mm.key === l.key);
+              if (!m) return null;
+              return (
+                <span
+                  key={l.key}
+                  className={`context-ring-popover__threshold context-ring-popover__threshold--${l.key}`}
+                  style={{ left: `${l.left}%`, "--threshold-scale": l.scale } as React.CSSProperties}
+                  title={t(m.hintKey)}
+                >
+                  {t(m.nameKey)} {m.pct}%
+                </span>
+              );
+            })}
           </div>
           <div className="context-ring-popover__rows">
             <div className="context-ring-popover__row">

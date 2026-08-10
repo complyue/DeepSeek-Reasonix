@@ -152,8 +152,17 @@ Reasonix 通过低频 compaction 保持 cache-first：
 - 达到 `agent.compact_force_ratio` 后，可执行强制折叠；
 - `context_window = 0` 会关闭该实例的 compaction。
 
-用户可用 `reasonix config compact-ratio [--local] [VALUE]` 查看或修改 65–85% 的自动
-压缩阈值，内置默认值为 80%。项目级设置优先于桌面端与新 CLI 会话共用的用户全局配置。
+用户可用 `reasonix config compact-ratio [--local] [VALUE]` 查看或修改 10–95% 的自动
+压缩阈值、用 `reasonix config snip-ratio [--local] [VALUE]` 调整 5–95% 的旧工具结果清理
+阈值，内置默认值分别为 80% 与 60%。四档构成 `soft < snip < compact < force` 约束链
+（降低 compact 前先设 snip；运行时若 soft 不低于 snip 会被压到其下）。项目级设置优先于
+桌面端与新 CLI 会话共用的用户全局配置。桌面端设置面板以对数刻度滑条同时调节四档，
+并带整数百分比吸附与越界拦截。
+
+阈值调整不热生效：运行中的会话沿用启动时加载的值，新值在 agent 重建时生效（恢复会话会
+重建 agent，因此恢复后的第一轮就按新阈值执行）。若被恢复的会话已超过压缩阈值，首轮
+`maybeCompact` 会先剪裁陈旧工具结果，仅在仍超阈值时才执行摘要；桌面端历史界面在恢复
+此类会话前会请求用户确认。
 
 tool result 的 snip/prune 不删除消息，确保 assistant `tool_calls` 与 tool result 配对。
 

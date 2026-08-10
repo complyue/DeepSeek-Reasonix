@@ -5474,6 +5474,9 @@ type HistoryPage struct {
 	HasOlder   bool             `json:"hasOlder"`
 	Revision   int64            `json:"revision,omitempty"`
 	Digest     string           `json:"digest,omitempty"`
+	// EstimatedTokens approximates the full-session prompt size (chars*0.25,
+	// matching the agent's fallback calibration); not a provider usage figure.
+	EstimatedTokens int `json:"estimatedTokens,omitempty"`
 }
 
 // historyProviderMessagesWithPersistedTimes overlays legacy event-record
@@ -5594,52 +5597,6 @@ func normalizeHistoryPageLimit(limit int) int {
 		return maxHistoryPageTurns
 	}
 	return limit
-}
-
-func historyPageFromMessages(messages []HistoryMessage, beforeTurn, limit int) HistoryPage {
-	limit = normalizeHistoryPageLimit(limit)
-	totalTurns := 0
-	for _, msg := range messages {
-		if msg.Role == "user" {
-			totalTurns++
-		}
-	}
-	if beforeTurn <= 0 || beforeTurn > totalTurns {
-		beforeTurn = totalTurns
-	}
-	startTurn := max(beforeTurn-limit, 0)
-	page := HistoryPage{
-		StartTurn:  startTurn,
-		EndTurn:    beforeTurn,
-		TotalTurns: totalTurns,
-		HasOlder:   startTurn > 0,
-	}
-	if len(messages) == 0 || startTurn >= beforeTurn {
-		page.Messages = []HistoryMessage{}
-		return page
-	}
-	page.Messages = historyMessagesForTurnRange(messages, startTurn, beforeTurn)
-	return page
-}
-
-func historyMessagesForTurnRange(messages []HistoryMessage, startTurn, endTurn int) []HistoryMessage {
-	out := make([]HistoryMessage, 0, len(messages))
-	turn := -1
-	for _, msg := range messages {
-		if msg.Role == "user" {
-			turn++
-		}
-		if turn < 0 {
-			if startTurn == 0 {
-				out = append(out, msg)
-			}
-			continue
-		}
-		if turn >= startTurn && turn < endTurn {
-			out = append(out, msg)
-		}
-	}
-	return out
 }
 
 func (a *App) HistoryForTab(tabID string) []HistoryMessage {
@@ -6037,6 +5994,7 @@ func historyPageFromProviderMessages(
 		historyTodoArgsWithCompleteSteps(msgs),
 		historyToolResultsByID(msgs),
 	)
+	page.EstimatedTokens = estimatePromptTokens(msgs)
 	return page
 }
 
@@ -6689,6 +6647,11 @@ func (a *App) ContextUsageForTab(tabID string) ContextInfo {
 	info.Window = window
 	info.CompactRatio = ctrl.CompactRatio()
 	info.Maintenance = contextMaintenanceInfo(ctrl.ContextMaintenanceSnapshot())
+	if soft, snip, compact, force := ctrl.CompactThresholds(); compact > 0 {
+		info.SoftRatio = soft
+		info.SnipRatio = snip
+		info.ForceRatio = force
+	}
 	return info
 }
 

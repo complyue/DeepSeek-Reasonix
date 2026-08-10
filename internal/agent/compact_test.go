@@ -396,6 +396,62 @@ func TestMaybeCompactThreshold(t *testing.T) {
 	}
 }
 
+func TestMaybeCompactThresholdsUseContextShape(t *testing.T) {
+	// A retried stream bills the prompt once per attempt (PromptTokens sums
+	// them), but the real context footprint is the latest single attempt
+	// (ContextPromptTokens). Thresholds must judge the actual occupancy, or a
+	// flaky retry compacts a session whose gauge still reads well under the
+	// trigger. Window 100 => soft 50, snip 60, compact 80, force 90.
+	newSess := func() *Session {
+		return &Session{Messages: []provider.Message{
+			{Role: provider.RoleSystem, Content: "sys"},
+			{Role: provider.RoleUser, Content: strings.Repeat("a ", 500)},
+			{Role: provider.RoleAssistant, Content: "b"},
+			{Role: provider.RoleUser, Content: "c"},
+			{Role: provider.RoleAssistant, Content: "d"},
+			{Role: provider.RoleUser, Content: "e"},
+			{Role: provider.RoleAssistant, Content: "f"},
+		}}
+	}
+
+	// Billable prompt at the trigger but real occupancy below soft: no fold.
+	sess := newSess()
+	a := New(&fakeProvider{reply: "s"}, tool.NewRegistry(), sess, Options{ContextWindow: 100, RecentKeep: 2, ArchiveDir: t.TempDir()}, event.Discard)
+	a.maybeCompact(context.Background(), &provider.Usage{PromptTokens: 80, ContextPromptTokens: 49})
+	if len(sess.Messages) != 7 {
+		t.Errorf("billable-only trigger must not compact, len = %d", len(sess.Messages))
+	}
+
+	// Real occupancy at the compact trigger folds even when billable is higher.
+	sess = newSess()
+	a = New(&fakeProvider{reply: "s"}, tool.NewRegistry(), sess, Options{ContextWindow: 100, RecentKeep: 2, ArchiveDir: t.TempDir()}, event.Discard)
+	a.maybeCompact(context.Background(), &provider.Usage{PromptTokens: 200, ContextPromptTokens: 80})
+	if !strings.Contains(sess.Messages[1].Content, "Summary of earlier") {
+		t.Errorf("real occupancy at trigger should fold, got: %+v", sess.Messages[1])
+	}
+
+	// Soft notice keys off the real occupancy too.
+	sess = newSess()
+	var notices []event.Event
+	a = New(&fakeProvider{reply: "s"}, tool.NewRegistry(), sess, Options{ContextWindow: 100, RecentKeep: 2, ArchiveDir: t.TempDir()}, event.FuncSink(func(e event.Event) {
+		if e.Kind == event.Notice {
+			notices = append(notices, e)
+		}
+	}))
+	a.maybeCompact(context.Background(), &provider.Usage{PromptTokens: 60, ContextPromptTokens: 50})
+	if len(notices) != 1 || !strings.Contains(notices[0].Detail, "context reached 50%") {
+		t.Fatalf("soft notice = %+v, want 50%% detail", notices)
+	}
+
+	// No Context* shape (unfinalized usage) falls back to billable PromptTokens.
+	sess = newSess()
+	a = New(&fakeProvider{reply: "s"}, tool.NewRegistry(), sess, Options{ContextWindow: 100, RecentKeep: 2, ArchiveDir: t.TempDir()}, event.Discard)
+	a.maybeCompact(context.Background(), &provider.Usage{PromptTokens: 80})
+	if !strings.Contains(sess.Messages[1].Content, "Summary of earlier") {
+		t.Errorf("fallback to billable prompt should fold, got: %+v", sess.Messages[1])
+	}
+}
+
 func TestMaybeCompactForceCeilingBypassesEconomics(t *testing.T) {
 	sess := &Session{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "sys"},

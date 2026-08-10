@@ -114,15 +114,21 @@ a project override:
 
 ```sh
 reasonix config compact-ratio              # show effective value and source
-reasonix config compact-ratio 75           # set the user-global default
-reasonix config compact-ratio --local 75   # override in ./reasonix.toml
+reasonix config compact-ratio 20           # set the user-global default
+reasonix config compact-ratio --local 20   # override in ./reasonix.toml
+reasonix config snip-ratio 15              # stale-tool-result cleanup threshold
 ```
 
-The editable range is 65–85%, with 80% as the built-in default. Lower values
-compact earlier and may reduce prompt-prefix cache reuse; higher values retain
-more context before compaction. Project `reasonix.toml` takes precedence over
-the user config. Changes apply to new CLI sessions; an already-running session
-keeps the threshold it loaded at startup.
+The editable range is 10–95% (compact) and 5–95% (snip), with 80%/60% as the
+built-in defaults. The four thresholds form a chain
+`soft_compact_ratio < tool_result_snip_ratio < compact_ratio < compact_force_ratio`;
+the desktop Settings slider and the CLI both keep it valid, so set the snip ratio
+first when lowering compact below its default. On a 1M-token window, snip 15% /
+compact 20% clean up stale tool results at ~150K and compress at ~200K. Lower
+values compact earlier and may reduce prompt-prefix cache reuse; higher values
+retain more context before compaction. Project `reasonix.toml` takes precedence
+over the user config. Changes apply to new CLI sessions; an already-running
+session keeps the threshold it loaded at startup.
 
 ## One-shot and automation
 

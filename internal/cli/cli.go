@@ -2324,6 +2324,8 @@ func configCommand(args []string) int {
 		return configReasoningLanguageCommand(args[1:])
 	case "compact-ratio":
 		return configCompactRatioCommand(args[1:])
+	case "snip-ratio":
+		return configSnipRatioCommand(args[1:])
 	case "currency":
 		return configCurrencyCommand(args[1:])
 	case "telemetry":
@@ -2576,8 +2578,8 @@ func configCompactRatioCommand(args []string) int {
 		return 0
 	}
 	percent, err := strconv.ParseFloat(strings.TrimSpace(rest[0]), 64)
-	if err != nil || math.IsNaN(percent) || math.IsInf(percent, 0) || percent < 65 || percent > 85 {
-		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "compact ratio must be a percentage between 65 and 85")
+	if err != nil || math.IsNaN(percent) || math.IsInf(percent, 0) || percent < 10 || percent > 95 {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "compact ratio must be a percentage between 10 and 95")
 		return 2
 	}
 	ratio := percent / 100
@@ -2646,7 +2648,8 @@ func formatCompactRatioPercent(ratio float64) string {
 func configUsage() {
 	fmt.Print(`Usage:
   reasonix config reasoning-language [--local] [auto|zh|en]
-  reasonix config compact-ratio [--local] [65..85]
+  reasonix config compact-ratio [--local] [10..95]
+  reasonix config snip-ratio [--local] [5..95]
   reasonix config currency [auto|CNY|USD]
   reasonix config telemetry [auto|on|off]
 `)
@@ -2655,12 +2658,6 @@ func configUsage() {
 func configTelemetryUsage() {
 	fmt.Print(`Usage:
   reasonix config telemetry [auto|on|off]
-`)
-}
-
-func configCompactRatioUsage() {
-	fmt.Print(`Usage:
-  reasonix config compact-ratio [--local] [65..85]
 `)
 }
 

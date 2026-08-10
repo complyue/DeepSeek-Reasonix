@@ -17,6 +17,7 @@ import { applyLiveSegments, coalesceStreamDeltas, completeLiveReasoning, type St
 import { getTranscriptStore } from "./transcriptStore";
 import { uiPerfTracker } from "./uiPerf";
 import { t, type DictKey } from "./i18n";
+import { useConfirmDialog } from "../components/ConfirmDialog";
 import { sameTodoList } from "./todoVisibility";
 import { fileDiffFromWire, summarize, summarizeFileDiff, type ToolFileDiff } from "./tools";
 import { modeHasAutoApproveTools, normalizeMode, normalizeToolApprovalMode } from "./types";
@@ -2557,6 +2558,7 @@ export function replayPendingPromptsForActiveTab(activeTabId: string | undefined
 }
 
 export function useController() {
+  const { confirm: confirmDialog, dialog: resumeGuardDialog } = useConfirmDialog();
   const statesRef = useRef<TabStates>(new Map());
   const liveListenersByTabRef = useRef(new Map<string, Set<() => void>>());
   const balanceRefreshSeqByTab = useRef(new Map<string, number>());
@@ -3386,6 +3388,16 @@ export function useController() {
         invalidateSharedQuery("MetaForTab", [targetTabId]);
         void refreshMetaForTab(targetTabId);
       }
+      if (e.kind === "compaction_done") {
+        // Compaction rewrites the session behind the scenes (turn-end or
+        // resume-time); the gauge must follow the collapsed usage immediately
+        // instead of waiting for the next turn_done snapshot.
+        app
+          .ContextUsageForTab(targetTabId)
+          .then((context) => dispatchTo(targetTabId, { type: "context", context }))
+          .catch(() => {});
+        void refreshBalanceForTab(targetTabId);
+      }
       if (e.kind === "turn_done" || e.kind === "notice") {
         app.JobsForTab(targetTabId).then((jobs) => dispatchTo(targetTabId, { type: "jobs", jobs: asArray(jobs) })).catch(() => {});
       }
@@ -4037,6 +4049,29 @@ export function useController() {
 
   const listSessions = useCallback(async (): Promise<SessionMeta[]> => asArray<SessionMeta>(await app.ListSessions().catch(() => [])), []);
   const listTrashedSessions = useCallback(async (): Promise<SessionMeta[]> => asArray<SessionMeta>(await app.ListTrashedSessions().catch(() => [])), []);
+  // confirmOverThresholdResume is the resume guard: restoring a session whose
+  // estimated prompt size already exceeds the compact threshold would trigger an
+  // immediate cleanup pass, so ask first (防呆) before hydrating it.
+  const confirmOverThresholdResume = useCallback(async (page: HistoryPage, tabId: string): Promise<boolean> => {
+    if (!page.estimatedTokens || page.estimatedTokens <= 0) return true;
+    const context = await app.ContextUsageForTab(tabId).catch(() => undefined);
+    const compactRatio = context?.compactRatio ?? 0;
+    const compactTokens = context && context.window > 0 && compactRatio > 0
+      ? Math.round(context.window * compactRatio)
+      : 0;
+    if (compactTokens <= 0 || page.estimatedTokens < compactTokens) return true;
+    return confirmDialog({
+      title: t("history.overThresholdResumeTitle"),
+      message: t("history.overThresholdResumeMessage", {
+        used: page.estimatedTokens.toLocaleString(),
+        threshold: compactTokens.toLocaleString(),
+      }),
+      confirmLabel: t("history.overThresholdResumeConfirm"),
+      cancelLabel: t("common.cancel"),
+      tone: "danger",
+    });
+  }, [confirmDialog]);
+
   const resumeSession = useCallback(async (path: string, tabId?: string, navigationIntentSeq?: number) => {
     const targetTabId = tabId || activeTabId;
     if (!targetTabId) return;
@@ -4059,6 +4094,13 @@ export function useController() {
       return;
     }
     if (!navigationCompletionCurrent(navigationSeq, "session.resume", targetTabId) || !sessionLoadCurrent(targetTabId, seq)) return;
+    if (!(await confirmOverThresholdResume(page, targetTabId))) {
+      dispatchTo(targetTabId, { type: "hydrate_error", reason: "resume-session", error: t("history.overThresholdResumeCancelled") });
+      return;
+    }
+    // Re-validate after the modal await: navigation may have moved on while the
+    // confirmation dialog was up, so hydrate the stale session no further.
+    if (!navigationCompletionCurrent(navigationSeq, "session.resume", targetTabId) || !sessionLoadCurrent(targetTabId, seq)) return;
     dispatchTo(targetTabId, { type: "reset" });
     dispatchTo(targetTabId, { type: "history_page", page, mode: "replace" });
     dispatchTo(targetTabId, { type: "hydrate_done" });
@@ -4066,7 +4108,7 @@ export function useController() {
     if (!isNavigationIntentCurrent(navigationSeq) || !sessionLoadCurrent(targetTabId, seq)) return;
     app.ContextUsageForTab(targetTabId).then((context) => dispatchTo(targetTabId, { type: "context", context })).catch(() => {});
     void refreshCheckpoints(targetTabId);
-  }, [activeTabId, beginActiveNavigation, bumpSessionLoadSeq, dispatchTo, isNavigationIntentCurrent, navigationCompletionCurrent, refreshCheckpoints, refreshMetaOnlyForTab, sessionLoadCurrent, waitForBackendActiveTab, waitForTabReady]);
+  }, [activeTabId, beginActiveNavigation, bumpSessionLoadSeq, confirmOverThresholdResume, dispatchTo, isNavigationIntentCurrent, navigationCompletionCurrent, refreshCheckpoints, refreshMetaOnlyForTab, sessionLoadCurrent, waitForBackendActiveTab, waitForTabReady]);
 
   const openChannelSession = useCallback(async (path: string, tabId: string, navigationIntentSeq?: number) => {
     if (!tabId) return;
@@ -4086,6 +4128,12 @@ export function useController() {
       return;
     }
     if (!navigationCompletionCurrent(navigationSeq, "session.channel", tabId) || !sessionLoadCurrent(tabId, seq)) return;
+    if (!(await confirmOverThresholdResume(page, tabId))) {
+      dispatchTo(tabId, { type: "hydrate_error", reason: "resume-session", error: t("history.overThresholdResumeCancelled") });
+      return;
+    }
+    // Symmetric with resumeSession: re-validate after the modal await.
+    if (!navigationCompletionCurrent(navigationSeq, "session.channel", tabId) || !sessionLoadCurrent(tabId, seq)) return;
     dispatchTo(tabId, { type: "reset" });
     dispatchTo(tabId, { type: "history_page", page, mode: "replace" });
     dispatchTo(tabId, { type: "hydrate_done" });
@@ -4093,7 +4141,7 @@ export function useController() {
     if (!isNavigationIntentCurrent(navigationSeq) || !sessionLoadCurrent(tabId, seq)) return;
     app.ContextUsageForTab(tabId).then((context) => dispatchTo(tabId, { type: "context", context })).catch(() => {});
     void refreshCheckpoints(tabId);
-  }, [beginActiveNavigation, bumpSessionLoadSeq, dispatchTo, isNavigationIntentCurrent, navigationCompletionCurrent, refreshCheckpoints, refreshMetaOnlyForTab, sessionLoadCurrent, waitForTabReady]);
+  }, [beginActiveNavigation, bumpSessionLoadSeq, confirmOverThresholdResume, dispatchTo, isNavigationIntentCurrent, navigationCompletionCurrent, refreshCheckpoints, refreshMetaOnlyForTab, sessionLoadCurrent, waitForTabReady]);
 
   const previewSession = useCallback(async (path: string): Promise<HistoryMessage[]> => asArray<HistoryMessage>(await app.PreviewSession(path).catch(() => [])), []);
   const deleteSession = useCallback((path: string) => app.DeleteSession(path).finally(() => invalidateCache()), []);
@@ -4711,6 +4759,7 @@ export function useController() {
     dismissExtensionForm, drainExtensionNotifications,
     setCollaborationMode, setCollaborationModeForTab, setToolApprovalMode, setToolApprovalModeForTab, setComposerProfileForTab, setGoal, setGoalForTab, clearGoal, clearGoalForTab, resumeGoal, resumeGoalForTab, pauseGoal, pauseGoalForTab,
     newSession, clearSession, listSessions, listTrashedSessions, resumeSession, openChannelSession, previewSession, deleteSession, restoreSession, purgeTrashedSession, renameSession,
+    resumeGuardDialog,
     loadOlderHistory,
     requestHistoryFullContent,
     refreshMeta, pickWorkspace, switchWorkspace, compact, rewind, rewindForTab, rewindForTabDetailed, undoRewindForTab, setModel, setEffort, setTokenMode, cancelJob,

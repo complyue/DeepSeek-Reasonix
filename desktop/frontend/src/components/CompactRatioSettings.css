@@ -1,77 +1,191 @@
-.compact-ratio-controls,
-.compact-ratio-custom-panel {
+.cthresholds {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
 }
 
-.compact-ratio-presets {
-  width: 100%;
-}
-
-.compact-ratio-presets .set-seg__btn {
+.cthresholds__presets {
   display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  min-width: 0;
-  min-height: 44px;
-  padding: 6px 8px;
-  text-transform: none;
-  white-space: normal;
-}
-
-.compact-ratio-preset__percent {
-  font-weight: 650;
-}
-
-.compact-ratio-preset__caption {
-  font-size: var(--text-2xs);
-}
-
-.compact-ratio-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-}
-
-.compact-ratio-current {
-  color: var(--fg);
-  font-size: var(--font-control-small);
-  font-weight: 600;
-}
-
-.compact-ratio-custom-toggle[aria-expanded="true"] {
-  background: var(--bg-soft);
-  color: var(--fg);
-}
-
-.compact-ratio-impact,
-.compact-ratio-custom__hint,
-.compact-ratio-custom__suffix {
-  color: var(--fg-dim);
-  font-size: var(--text-2xs);
-  line-height: 1.45;
-}
-
-.compact-ratio-custom-panel {
+  flex-wrap: wrap;
   gap: 6px;
 }
 
-.compact-ratio-custom {
-  justify-content: flex-start;
-  max-width: 100%;
+.cthresholds__preset--on {
+  background: var(--bg-soft);
+  color: var(--fg);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
-.compact-ratio-custom .mem-input {
-  flex: 0 0 88px;
+.cthresholds__stage {
+  position: relative;
+  padding: 40px 6px 46px;
 }
 
-.compact-ratio-custom__hint--invalid {
-  color: var(--danger);
+/* Track: full-width hit area with a thin rail, matching the zoom-slider idiom. */
+.cthresholds__track {
+  position: relative;
+  height: 24px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.cthresholds__track-bg {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 4px;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  background: var(--bg-soft);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.cthresholds__thumb {
+  position: absolute;
+  top: 0;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  margin-left: -12px;
+  background: transparent;
+  border: none;
+  cursor: grab;
+  touch-action: none;
+}
+
+.cthresholds__thumb::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 5px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--thumb-color);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--border);
+  transition: transform 0.08s ease;
+}
+
+.cthresholds__thumb:hover::after,
+.cthresholds__thumb--active::after {
+  transform: scale(1.25);
+}
+
+.cthresholds__thumb:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.cthresholds__thumb--flash::after {
+  animation: cthresholds-flash 0.28s ease;
+}
+
+@keyframes cthresholds-flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--border);
+  }
+  40% {
+    box-shadow: 0 0 0 3px var(--bg), 0 0 0 6px var(--danger);
+  }
+}
+
+/* Labels: absolutely positioned against their thumb x on the track; the
+   label layer overlays the track area (stage padding offsets) so vertical
+   offsets resolve against the 24px rail instead of the tall stage, keeping
+   the label's leader line short and attached to the handle. */
+.cthresholds__labels {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  top: 40px;
+  bottom: 46px;
+  pointer-events: none;
+}
+
+.cthresholds__label {
+  position: absolute;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  background: var(--bg);
+  padding: 1px 5px;
+  border-radius: 4px;
+  z-index: 2;
+  font-size: var(--text-2xs);
+  line-height: 1.3;
+}
+
+.cthresholds__label--top {
+  bottom: calc(100% + 6px);
+}
+
+.cthresholds__label--top::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 1px;
+  height: 6px;
+  background: var(--thumb-color);
+  transform: translateX(-50%);
+}
+
+.cthresholds__label--bottom {
+  top: calc(100% + 6px);
+}
+
+.cthresholds__label--bottom::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -6px;
+  width: 1px;
+  height: 6px;
+  background: var(--thumb-color);
+  transform: translateX(-50%);
+}
+
+.cthresholds__label--depth2 {
+  bottom: calc(100% + 28px);
+}
+
+.cthresholds__label--depth2::after {
+  height: 28px;
+  bottom: -28px;
+}
+
+.cthresholds__label--depth3 {
+  top: calc(100% + 28px);
+}
+
+.cthresholds__label--depth3::after {
+  height: 28px;
+  top: -28px;
+}
+
+.cthresholds__label--flash {
+  animation: cthresholds-label-flash 0.28s ease;
+}
+
+@keyframes cthresholds-label-flash {
+  40% {
+    background: color-mix(in srgb, var(--danger) 18%, var(--bg));
+  }
+}
+
+.cthresholds__label-name {
+  font-weight: 600;
+}
+
+.cthresholds__label-value {
+  font-weight: 650;
+}
+
+.cthresholds__label-tokens {
+  color: var(--fg-dim);
 }

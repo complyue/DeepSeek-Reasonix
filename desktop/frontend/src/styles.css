@@ -25099,16 +25099,53 @@ body > .mermaid-diagram--fullscreen {
 
 .context-panel__capacity-scale {
   position: relative;
-  height: 21px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.context-panel__capacity-scale-top,
+.context-panel__capacity-scale-bottom {
+  position: relative;
+  height: calc(4px + (var(--pin-rows-top, 0) + 1) * 22px);
+}
+
+.context-panel__capacity-scale-bottom {
+  height: calc(4px + (var(--pin-rows-bottom, 0) + 1) * 22px);
+}
+
+.context-panel__capacity-pin-line {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 1.5px;
+  height: calc(4px + var(--pin-row, 0) * 22px);
+  background: color-mix(in srgb, var(--fg) 26%, transparent);
+  border-radius: 1px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.context-panel__capacity-scale-bottom .context-panel__capacity-pin-line {
+  top: 0;
+  bottom: auto;
+  height: calc(4px + var(--pin-row, 0) * 22px);
+}
+
+.context-panel__capacity-scale-top .context-panel__capacity-pin {
+  top: auto;
+  /* row 0 hugs the track (scale bottom); higher rows spring further away */
+  bottom: calc(4px + var(--pin-row, 0) * 22px);
 }
 
 .context-panel__capacity-pin {
   position: absolute;
-  top: 0;
+  top: calc(var(--pin-row, 0) * 22px);
+  left: 50%;
   z-index: var(--z-local-raised);
-  max-width: 58px;
+  max-width: 92px;
   overflow: hidden;
-  padding: 3px 7px;
+  padding: 4px 6px;
   border: 1px solid var(--border-soft);
   border-radius: 999px;
   background: var(--bg-elev);
@@ -25129,10 +25166,23 @@ body > .mermaid-diagram--fullscreen {
   color: white;
 }
 
+.context-panel__capacity-pin--soft,
 .context-panel__capacity-pin--compact {
   border-color: color-mix(in srgb, var(--fg) 16%, transparent);
   background: color-mix(in srgb, var(--bg-elev) 90%, var(--fg) 10%);
   color: var(--fg-dim);
+}
+
+.context-panel__capacity-pin--snip {
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-elev));
+  color: var(--fg);
+}
+
+.context-panel__capacity-pin--force {
+  border-color: color-mix(in srgb, var(--danger) 44%, transparent);
+  background: color-mix(in srgb, var(--danger) 12%, var(--bg-elev));
+  color: color-mix(in srgb, var(--danger) 78%, var(--fg-dim));
 }
 
 .context-panel__capacity-meter .context-panel__progress-track {
@@ -31815,17 +31865,43 @@ body > .mermaid-diagram--fullscreen {
   width: 1px;
   pointer-events: none;
 }
+.context-ring-popover__mark--soft {
+  background: color-mix(in srgb, var(--fg) 45%, var(--fg-faint));
+}
+.context-ring-popover__mark--snip {
+  background: color-mix(in srgb, var(--accent) 55%, var(--fg-faint));
+}
 .context-ring-popover__mark--compact {
   background: color-mix(in srgb, var(--warn) 55%, var(--fg-faint));
 }
-.context-ring-popover__mark--attention {
-  background: repeating-linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--fg-faint) 35%, transparent) 0px,
-    color-mix(in srgb, var(--fg-faint) 35%, transparent) 2px,
-    transparent 2px,
-    transparent 4px
-  );
+.context-ring-popover__mark--force {
+  background: color-mix(in srgb, var(--danger) 55%, var(--fg-faint));
+}
+.context-ring-popover__thresholds {
+  position: relative;
+  height: calc(var(--text-2xs) * 1.4);
+  margin-top: 6px;
+}
+.context-ring-popover__threshold {
+  position: absolute;
+  top: 0;
+  font-size: calc(var(--text-2xs) * var(--threshold-scale, 1));
+  line-height: 1.4;
+  color: var(--fg-dim);
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+.context-ring-popover__threshold--soft {
+  color: color-mix(in srgb, var(--fg) 75%, var(--fg-dim));
+}
+.context-ring-popover__threshold--snip {
+  color: color-mix(in srgb, var(--accent) 75%, var(--fg-dim));
+}
+.context-ring-popover__threshold--compact {
+  color: color-mix(in srgb, var(--warn) 75%, var(--fg-dim));
+}
+.context-ring-popover__threshold--force {
+  color: color-mix(in srgb, var(--danger) 75%, var(--fg-dim));
 }
 .context-ring-popover__title {
   min-width: 0;

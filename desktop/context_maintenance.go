@@ -13,6 +13,9 @@ type ContextInfo struct {
 	Window          int                         `json:"window"`
 	SessionTokens   int                         `json:"sessionTokens"`
 	CompactRatio    float64                     `json:"compactRatio,omitempty"`
+	SoftRatio       float64                     `json:"softRatio,omitempty"`
+	SnipRatio       float64                     `json:"snipRatio,omitempty"`
+	ForceRatio      float64                     `json:"forceRatio,omitempty"`
 	SessionCost     float64                     `json:"sessionCost,omitempty"`
 	SessionCurrency string                      `json:"sessionCurrency,omitempty"`
 	CacheHitTokens  int                         `json:"cacheHitTokens,omitempty"`

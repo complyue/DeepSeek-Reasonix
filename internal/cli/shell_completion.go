@@ -119,6 +119,7 @@ func cliCompletionRootSpec() cliCompletionSpec {
 			completionSpec("auto-plan", []cliCompletionFlag{completionFlag("--local", cliCompletionNoValue), help}),
 			completionSpec("reasoning-language", []cliCompletionFlag{completionFlag("--local", cliCompletionNoValue), help}),
 			completionSpec("compact-ratio", []cliCompletionFlag{completionFlag("--local", cliCompletionNoValue), help}),
+			completionSpec("snip-ratio", []cliCompletionFlag{completionFlag("--local", cliCompletionNoValue), help}),
 			completionSpec("currency", []cliCompletionFlag{completionFlag("--local", cliCompletionNoValue), help}),
 			completionSpec("telemetry", []cliCompletionFlag{help}),
 		),

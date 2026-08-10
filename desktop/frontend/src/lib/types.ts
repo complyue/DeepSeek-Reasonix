@@ -608,6 +608,7 @@ export interface HistoryPage {
   hasOlder: boolean;
   revision?: number;
   digest?: string;
+  estimatedTokens?: number;
 }
 
 // ── Windowed history paging (desktop/history_slice.go) ──────────────────────
@@ -816,6 +817,9 @@ export interface ContextInfo {
   window: number;
   sessionTokens: number;
   compactRatio?: number;
+  softRatio?: number;
+  snipRatio?: number;
+  forceRatio?: number;
   sessionCost?: number;
   sessionCurrency?: string;
   cacheHitTokens?: number;
@@ -1887,6 +1891,9 @@ export interface AgentView {
   compactRatio?: number; // Advanced global default; older backends omit it.
   effectiveCompactRatio?: number; // Active local session after project overrides.
   compactRatioOverridden?: boolean;
+  softRatio?: number; // compaction notice threshold
+  snipRatio?: number; // stale-tool-result snip threshold
+  forceRatio?: number; // force-compaction high-water mark
 }
 
 export interface BotAllowlistView {

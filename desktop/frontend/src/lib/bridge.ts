@@ -558,6 +558,7 @@ export interface AppBindings {
   SetAgentParams(temperature: number, maxSteps: number, plannerMaxSteps: number, systemPrompt: string): Promise<void>;
   SetColdResumePrune(enabled: boolean): Promise<void>;
   SetCompactRatio(ratio: number): Promise<void>;
+  SetCompactionThresholds(soft: number, snip: number, compact: number, force: number): Promise<void>;
   SetReasoningLanguage(lang: string): Promise<void>;
   SetTrayLocale(locale: "en" | "zh" | "zh-TW"): Promise<void>;
   // SetBypass is the legacy Wails name for YOLO/full-access tool auto-approval
@@ -1019,7 +1020,7 @@ function bridgeBreadcrumb(method: string): string {
     return `turn ${method}`;
   if (/^(SetModel|SetEffort|SetTokenMode|SetDefaultModel|SetPlannerModel|SetSubagentModel|SetSubagentEffort|SetMaxSubagentDepth|SetMaxSubagentConcurrency|SetMaxParallelWriters)/.test(method))
     return `model ${method}`;
-  if (/^(SetDesktop|SetCloseBehavior|SetDisplayMode|SetStatusBar|SetReasoningDisplayMode|SetExpandThinking|SetAutoPlan|SetDefaultToolApprovalMode|SetCompactRatio|SetReasoningLanguage)/.test(method))
+  if (/^(SetDesktop|SetCloseBehavior|SetDisplayMode|SetStatusBar|SetReasoningDisplayMode|SetExpandThinking|SetAutoPlan|SetDefaultToolApprovalMode|SetCompactRatio|SetCompactionThresholds|SetReasoningLanguage)/.test(method))
     return `settings ${method}`;
   if (/^(SaveProvider|SetProviderWebSearch|SaveProviderModelCatalogs|AddOfficialProviderAccess|UpgradeDeepSeekProviderAccess|AddProviderPresetAccess|ResetProviderPresetAccess|RemoveProviderAccess|RemoveProviderAccesses|DeleteProvider|SaveProviderKey|SetProviderKey|ClearProviderKey|FetchProviderModels|FetchAllProviderModels|ConnectKey)/.test(method))
     return `provider ${method}`;
@@ -4882,8 +4883,14 @@ function makeMockApp(): AppBindings {
       settings.agent = { ...settings.agent, coldResumePrune: enabled };
     },
     async SetCompactRatio(ratio: number) {
-      if (!Number.isFinite(ratio) || ratio < 0.65 || ratio > 0.85) throw new Error("compact ratio must be between 0.65 and 0.85");
+      if (!Number.isFinite(ratio) || ratio < 0.10 || ratio > 0.95) throw new Error("compact ratio must be between 0.10 and 0.95");
       settings.agent = { ...settings.agent, compactRatio: ratio };
+    },
+    async SetCompactionThresholds(soft: number, snip: number, compact: number, force: number) {
+      if (!Number.isFinite(soft) || !Number.isFinite(snip) || soft < 0.05 || soft > 0.95 || snip < 0.05 || snip > 0.95) throw new Error("soft/snip thresholds must be between 0.05 and 0.95");
+      if (!Number.isFinite(compact) || !Number.isFinite(force) || compact < 0.10 || compact > 0.95 || force < 0.10 || force > 0.95) throw new Error("compact/force thresholds must be between 0.10 and 0.95");
+      if (!(soft < snip && snip < compact && compact < force)) throw new Error("thresholds must satisfy soft < snip < compact < force");
+      settings.agent = { ...settings.agent, compactRatio: compact, softRatio: soft, snipRatio: snip, forceRatio: force };
     },
     async SetReasoningLanguage(lang: string) {
       const normalized = lang === "zh" || lang === "en" ? lang : "auto";

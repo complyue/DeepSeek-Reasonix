@@ -167,6 +167,9 @@ type AgentView struct {
 	CompactRatio           float64 `json:"compactRatio,omitempty"`
 	EffectiveCompactRatio  float64 `json:"effectiveCompactRatio,omitempty"`
 	CompactRatioOverridden bool    `json:"compactRatioOverridden,omitempty"`
+	SoftRatio              float64 `json:"softRatio,omitempty"`
+	SnipRatio              float64 `json:"snipRatio,omitempty"`
+	ForceRatio             float64 `json:"forceRatio,omitempty"`
 }
 
 type BotAllowlistView struct {
@@ -1007,6 +1010,9 @@ func (a *App) Settings() SettingsView {
 			ReasoningLanguage:      cfg.ReasoningLanguage(),
 			CompactRatio:           cfg.Agent.CompactRatio,
 			EffectiveCompactRatio:  cfg.Agent.CompactRatio,
+			SoftRatio:              cfg.Agent.SoftCompactRatio,
+			SnipRatio:              cfg.Agent.ToolResultSnipRatio,
+			ForceRatio:             cfg.Agent.CompactForceRatio,
 		},
 		Bot:                          botSettingsView(cfg.Bot),
 		DesktopLanguage:              cfg.DesktopLanguage(),
@@ -3503,17 +3509,6 @@ func (a *App) SetAgentParams(temperature float64, maxSteps int, plannerMaxSteps 
 		c.Agent.SystemPrompt = systemPrompt
 		return nil
 	})
-}
-
-func (a *App) SetColdResumePrune(enabled bool) error {
-	return a.applyConfigChange(func(c *config.Config) error { return c.SetColdResumePrune(enabled) })
-}
-
-func (a *App) SetCompactRatio(ratio float64) error {
-	_, err := a.applyConfigChangeWithWarning("context compaction threshold", func(c *config.Config) error {
-		return c.SetCompactRatio(ratio)
-	})
-	return err
 }
 
 func (a *App) SetReasoningLanguage(lang string) error {

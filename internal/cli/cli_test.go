@@ -908,14 +908,14 @@ func TestConfigCompactRatioLocalCreatesMinimalProjectOverride(t *testing.T) {
 func TestConfigCompactRatioRejectsValuesOutsideEditableRange(t *testing.T) {
 	isolateCLIConfigHome(t)
 
-	for _, value := range []string{"64", "86", "NaN", "+Inf", "not-a-number"} {
+	for _, value := range []string{"9", "96", "NaN", "+Inf", "not-a-number"} {
 		t.Run(value, func(t *testing.T) {
 			errOut := captureStderr(t, func() {
 				if rc := Run([]string{"config", "compact-ratio", value}, "test-version"); rc != 2 {
 					t.Fatalf("config compact-ratio %s rc = %d, want 2", value, rc)
 				}
 			})
-			if !strings.Contains(errOut, "percentage between 65 and 85") {
+			if !strings.Contains(errOut, "percentage between 10 and 95") {
 				t.Fatalf("config compact-ratio %s stderr = %q", value, errOut)
 			}
 		})

@@ -1,6 +1,6 @@
 // ContextPanel shows the active tab's context gauge and token usage.
 // All visible text is routed through the i18n dictionary.
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { asArray } from "../lib/array";
 import { app } from "../lib/bridge";
 import { useI18n, type Locale, type Translator } from "../lib/i18n";
@@ -424,6 +424,73 @@ export function ContextPanel({
   const usagePct = windowTokens > 0 ? Math.min(100, Math.round((usedTokens / windowTokens) * 100)) : 0;
   const compactRatio = context?.compactRatio && context.compactRatio > 0 ? context.compactRatio : 0.8;
   const compactPct = Math.round(compactRatio * 100);
+  const softPct = context?.softRatio && context.softRatio > 0 ? Math.round(context.softRatio * 100) : 0;
+  const snipPct = context?.snipRatio && context.snipRatio > 0 ? Math.round(context.snipRatio * 100) : 0;
+  const forcePct = context?.forceRatio && context.forceRatio > 0 ? Math.round(context.forceRatio * 100) : 0;
+  const thresholdNames: Record<string, DictKey> = {
+    soft: "settings.compactionSoft",
+    snip: "settings.compactionSnip",
+    compact: "settings.compactionCompact",
+    force: "settings.compactionForce",
+  };
+  // log-scaled track (matches the settings slider: 5–95% compressed to 0–100)
+  const LOG_MIN = 5;
+  const LOG_MAX = 95;
+  const logPosOf = (pct: number) => {
+    const p = Math.max(pct, LOG_MIN);
+    return Math.log(p / LOG_MIN) / Math.log(LOG_MAX / LOG_MIN);
+  };
+  // Threshold pills alternate above/below the progress track (slider
+  // semantics); the anchor x is the log position and never moves.
+  const pinMarks = useMemo(
+    () =>
+      [
+        { key: "used", pct: usagePct },
+        { key: "soft", pct: softPct },
+        { key: "snip", pct: snipPct },
+        { key: "compact", pct: compactPct },
+        { key: "force", pct: forcePct },
+      ].filter((m) => m.key === "used" || m.pct > 0),
+    [usagePct, softPct, snipPct, compactPct, forcePct],
+  );
+  const meterRef = useRef<HTMLDivElement>(null);
+  const scaleRef = useRef<HTMLDivElement>(null);
+  const [meterW, setMeterW] = useState(0);
+  useLayoutEffect(() => {
+    const el = meterRef.current;
+    if (el && el.clientWidth > 0 && el.clientWidth !== meterW) setMeterW(el.clientWidth);
+  }, [meterW, pinMarks]);
+  const pinLayout = useMemo(() => {
+    // First-principle collision: spring when two pills sit closer than 11%
+    // of the meter width on the log track. That ratio sits between the
+    // user-verified boundaries (12<->16 = 9.75% springs, 14<->20 = 12.15%
+    // stays) and is independent of container width, font size and any
+    // runtime measurement — the judgment is deterministic everywhere.
+    const COLLIDE_RATIO = 0.11;
+    const collide = (aPct: number, bPct: number) =>
+      Math.abs(logPosOf(aPct) - logPosOf(bPct)) < COLLIDE_RATIO;
+    const thresholdKeys = pinMarks.filter((m) => m.key !== "used");
+    const layout: { key: string; pct: number; side: "top" | "bottom"; row: number }[] = thresholdKeys.map((m) => ({ key: m.key, pct: m.pct, side: "top", row: 0 }));
+    const byKey = Object.fromEntries(layout.map((l) => [l.key, l]));
+    if (byKey.soft && byKey.compact && collide(byKey.soft.pct, byKey.compact.pct)) byKey.compact.row = 1;
+    if (byKey.snip && byKey.force && collide(byKey.snip.pct, byKey.force.pct)) byKey.force.row = 1;
+    if (byKey.snip) byKey.snip.side = "bottom";
+    if (byKey.force) byKey.force.side = "bottom";
+    const used = pinMarks.find((m) => m.key === "used");
+    if (used) {
+      // The used pill always hugs the track on the top side (soft/compact
+      // row 0); thresholds that collide with it there spring deeper instead.
+      // 14% used collides only with soft 12% -> soft springs, compact 20%
+      // (34px away) stays on the same row.
+      for (const l of layout) {
+        if (l.side === "top" && l.row === 0 && collide(used.pct, l.pct)) l.row = 1;
+      }
+      layout.push({ key: "used", pct: used.pct, side: "top", row: 0 });
+    }
+    return layout.map((l) => ({ key: l.key, left: logPosOf(l.pct) * 100, side: l.side, row: l.row }));
+  }, [pinMarks]);
+  const topRows = Math.max(0, ...pinLayout.filter((l) => l.side === "top").map((l) => l.row));
+  const bottomRows = Math.max(0, ...pinLayout.filter((l) => l.side === "bottom").map((l) => l.row));
   const compactTokens = windowTokens > 0 ? Math.round(windowTokens * compactRatio) : 0;
   const tokensUntilCompact = compactTokens > usedTokens ? compactTokens - usedTokens : 0;
   const breakdown = contextBreakdown(usedTokens, windowTokens, promptTokens, completionTokens, reasoningTokens);
@@ -447,8 +514,6 @@ export function ContextPanel({
   const windowLabel = formatTokens(windowTokens);
   const compactRemainingLabel = tokensUntilCompact > 0 ? formatTokens(tokensUntilCompact) : "0";
   const compactMarkerPct = Math.max(0, Math.min(100, compactPct));
-  const usageMarkerPct = Math.max(6, Math.min(94, usagePct));
-  const compactLabelPct = Math.max(6, Math.min(94, compactMarkerPct));
   const usageSummary = t("context.windowUsageSummary", { used: usedLabel, window: windowLabel, pct: usagePct });
   const compactSummary = t("context.windowCompactRemaining", { used: usedLabel, window: windowLabel, tokens: compactRemainingLabel, pct: compactPct });
   const activeAnalysisView: UsageAnalysisView = showSourceUsageRows ? analysisView : "type";
@@ -527,17 +592,53 @@ export function ContextPanel({
                 <span className="context-panel__capacity-status">{t(windowStatus.key)}</span>
                 <strong>{usedLabel}/{windowLabel}</strong>
               </div>
-              <div className="context-panel__usage-progress context-panel__capacity-meter" aria-label={`${t(windowStatus.key)}. ${usageSummary}. ${compactSummary}`}>
-                <div className="context-panel__capacity-scale" aria-hidden="true">
-                  <span className="context-panel__capacity-pin context-panel__capacity-pin--used" style={{ left: `${usageMarkerPct}%` }}>{usagePct}%</span>
-                  <span className="context-panel__capacity-pin context-panel__capacity-pin--compact" style={{ left: `${compactLabelPct}%` }}>{compactPct}%</span>
-                </div>
-                <div className="context-panel__progress-track" aria-hidden="true">
-                  <span className="context-panel__progress-segment context-panel__progress-segment--prompt" style={{ width: `${breakdown.promptPct}%` }} />
-                  <span className="context-panel__progress-segment context-panel__progress-segment--completion" style={{ width: `${Math.max(0, breakdown.completionPct - breakdown.promptPct)}%` }} />
-                  <span className="context-panel__progress-segment context-panel__progress-segment--reasoning" style={{ width: `${Math.max(0, breakdown.reasoningPct - breakdown.completionPct)}%` }} />
-                  <span className="context-panel__progress-segment context-panel__progress-segment--other" style={{ width: `${Math.max(0, breakdown.otherPct - breakdown.reasoningPct)}%` }} />
-                  <span className="context-panel__compact-marker" style={{ left: `${compactMarkerPct}%` }} />
+              <div className="context-panel__usage-progress context-panel__capacity-meter" ref={meterRef} aria-label={`${t(windowStatus.key)}. ${usageSummary}. ${compactSummary}`}>
+                <div className="context-panel__capacity-scale" ref={scaleRef} style={{ "--pin-rows-top": topRows, "--pin-rows-bottom": bottomRows } as React.CSSProperties}>
+                  <div className="context-panel__capacity-scale-top" aria-hidden="true">
+                    {pinLayout.filter((l) => l.side === "top").map((l) => {
+                      const m = pinMarks.find((p) => p.key === l.key);
+                      if (!m) return null;
+                      return (
+                        <Fragment key={l.key}>
+                          <span className="context-panel__capacity-pin-line" style={{ left: `${l.left}%`, "--pin-row": l.row } as React.CSSProperties} />
+                          <span
+                            className={`context-panel__capacity-pin context-panel__capacity-pin--${l.key}`}
+                            data-key={l.key}
+                            style={{ left: `${l.left}%`, "--pin-row": l.row } as React.CSSProperties}
+                            title={m.key === "used" ? usageSummary : `${t(thresholdNames[m.key])} ${m.pct}%`}
+                          >
+                            {m.key === "used" ? `${m.pct}%` : `${t(thresholdNames[m.key])} ${m.pct}%`}
+                          </span>
+                        </Fragment>
+                      );
+                    })}
+                  </div>
+                  <div className="context-panel__progress-track" aria-hidden="true">
+                    <span className="context-panel__progress-segment context-panel__progress-segment--prompt" style={{ width: `${logPosOf(breakdown.promptPct) * 100}%` }} />
+                    <span className="context-panel__progress-segment context-panel__progress-segment--completion" style={{ width: `${Math.max(0, logPosOf(breakdown.completionPct) - logPosOf(breakdown.promptPct)) * 100}%` }} />
+                    <span className="context-panel__progress-segment context-panel__progress-segment--reasoning" style={{ width: `${Math.max(0, logPosOf(breakdown.reasoningPct) - logPosOf(breakdown.completionPct)) * 100}%` }} />
+                    <span className="context-panel__progress-segment context-panel__progress-segment--other" style={{ width: `${Math.max(0, logPosOf(breakdown.otherPct) - logPosOf(breakdown.reasoningPct)) * 100}%` }} />
+                    <span className="context-panel__compact-marker" style={{ left: `${compactMarkerPct > 0 ? logPosOf(compactMarkerPct) * 100 : 0}%` }} />
+                  </div>
+                  <div className="context-panel__capacity-scale-bottom" aria-hidden="true">
+                    {pinLayout.filter((l) => l.side === "bottom").map((l) => {
+                      const m = pinMarks.find((p) => p.key === l.key);
+                      if (!m) return null;
+                      return (
+                        <Fragment key={l.key}>
+                          <span className="context-panel__capacity-pin-line" style={{ left: `${l.left}%`, "--pin-row": l.row } as React.CSSProperties} />
+                          <span
+                            className={`context-panel__capacity-pin context-panel__capacity-pin--${l.key}`}
+                            data-key={l.key}
+                            style={{ left: `${l.left}%`, "--pin-row": l.row } as React.CSSProperties}
+                            title={m.key === "used" ? usageSummary : `${t(thresholdNames[m.key])} ${m.pct}%`}
+                          >
+                            {m.key === "used" ? `${m.pct}%` : `${t(thresholdNames[m.key])} ${m.pct}%`}
+                          </span>
+                        </Fragment>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
               <div className="context-panel__capacity-foot">

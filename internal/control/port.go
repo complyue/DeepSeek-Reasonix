@@ -136,6 +136,7 @@ type SessionHistory interface {
 	Compact(ctx context.Context, instructions string) error
 	CompactRatio() float64
 	ContextReport() (summary, detail string)
+	CompactThresholds() (soft, snip, compact, force float64)
 	SummarizeFrom(ctx context.Context, turn int) error
 	SummarizeUpTo(ctx context.Context, turn int) error
 }

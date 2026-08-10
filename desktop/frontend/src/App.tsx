@@ -1142,6 +1142,7 @@ export default function App() {
     syncActiveTab,
     ensureBlankTab,
     ensureBlankSurface,
+    resumeGuardDialog,
   } = useController();
   const { locale, setPref: setLocalePref } = useI18n();
   const t = useT();
@@ -4948,6 +4949,8 @@ export default function App() {
               />
             )}
           </main>
+
+          {resumeGuardDialog}
 
           {!sidebarImDetailConnection && (
           <footer className={["footer", terminalPanelOpen && !sidebarCreation ? "footer--compact" : "", decisionSurface ? "footer--decision" : ""].filter(Boolean).join(" ")} ref={footerRef}>
