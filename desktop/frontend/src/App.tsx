@@ -4917,6 +4917,11 @@ export default function App() {
                 onManageAllowlist={() => openBotAllowlistSettings(sidebarImDetailConnection.connectionId)}
                 onOpenSession={() => void openSidebarImConnectionSession(sidebarImDetailConnection)}
               />
+            ) : transcriptHydrating ? (
+              <div className="loading-screen" role="status" aria-live="polite">
+                <span className="loading-screen__spinner" aria-hidden="true" />
+                <span className="loading-screen__text">{t("common.loading")}</span>
+              </div>
             ) : noticePreviewMockEnabled() ? (
               <NoticePreviewPanel />
             ) : (
@@ -5296,7 +5301,12 @@ export default function App() {
               </div>
             </div>
             <div className="workbench-dock__body">
-              {rightDockMode === "remote" ? (
+              {transcriptHydrating ? (
+                <div className="loading-screen" role="status" aria-live="polite">
+                  <span className="loading-screen__spinner" aria-hidden="true" />
+                  <span className="loading-screen__text">{t("common.loading")}</span>
+                </div>
+              ) : rightDockMode === "remote" ? (
                 <Suspense fallback={null}>
                   <RemotePanel onClose={() => setWorkspacePanel(false)} />
                 </Suspense>
