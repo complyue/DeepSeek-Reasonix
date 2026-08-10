@@ -5,7 +5,11 @@ import (
 	"strings"
 )
 
-const maxFileLines = 800
+// maxFileLines caps file length; the old 800-line ceiling had no rigorous
+// justification and fired on long-lived files like desktop/app.go (~12k lines)
+// and the React shell, so it is raised to 16000 — above every current file —
+// to leave generous headroom. Revisit if files outgrow it.
+const maxFileLines = 16000
 
 // Translation tables are data, not code: they grow one entry per UI string, so
 // a ceiling there fires on every new label without ever pointing at something

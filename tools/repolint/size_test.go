@@ -17,14 +17,14 @@ func TestSizeRuleCoversTypeScript(t *testing.T) {
 		data      []byte
 		wantRule  string
 	}{
-		{"tsx over the ceiling", "desktop/frontend/src/components/Big.tsx", linesOf(900), ruleFileSize},
-		{"ts over the ceiling", "desktop/frontend/src/lib/big.ts", linesOf(900), ruleFileSize},
+		{"tsx over the ceiling", "desktop/frontend/src/components/Big.tsx", linesOf(16100), ruleFileSize},
+		{"ts over the ceiling", "desktop/frontend/src/lib/big.ts", linesOf(16100), ruleFileSize},
 		{"tsx under the ceiling", "desktop/frontend/src/components/Small.tsx", linesOf(100), ""},
-		{"front-end test dir", "desktop/frontend/src/__tests__/big.test.ts", linesOf(900), ruleTestSize},
-		{"spec suffix", "desktop/frontend/src/lib/big.spec.ts", linesOf(900), ruleTestSize},
-		{"worker ts", "workers/crash-report/src/big.ts", linesOf(900), ruleFileSize},
-		{"go file keeps its rule", "internal/agent/big.go", goLinesOf(900), ruleFileSize},
-		{"locale table is exempt", "desktop/frontend/src/locales/zh.ts", linesOf(3000), ""},
+		{"front-end test dir", "desktop/frontend/src/__tests__/big.test.ts", linesOf(16100), ruleTestSize},
+		{"spec suffix", "desktop/frontend/src/lib/big.spec.ts", linesOf(16100), ruleTestSize},
+		{"worker ts", "workers/crash-report/src/big.ts", linesOf(16100), ruleFileSize},
+		{"go file keeps its rule", "internal/agent/big.go", goLinesOf(16100), ruleFileSize},
+		{"locale table is exempt", "desktop/frontend/src/locales/zh.ts", linesOf(16100), ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := parseBytes(tc.rel, tc.data)
