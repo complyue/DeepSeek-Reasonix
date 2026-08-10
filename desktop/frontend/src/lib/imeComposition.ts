@@ -49,3 +49,29 @@ export function useImeCompositionGuard(ref: { current: HTMLElement | null }, act
   }, [active]);
   return { composingRef, lastCompositionEndAt };
 }
+
+let lastGlobalCompositionEndAt = 0;
+let globalListenerTarget: Document | null = null;
+
+function onGlobalCompositionEnd(): void {
+  lastGlobalCompositionEndAt = Date.now();
+}
+
+function ensureGlobalCompositionListener(): void {
+  if (typeof document === "undefined") return;
+  if (globalListenerTarget === document) return;
+  // Tests swap the jsdom document between cases; never leave the listener on
+  // a closed document.
+  globalListenerTarget?.removeEventListener("compositionend", onGlobalCompositionEnd);
+  globalListenerTarget = document;
+  document.addEventListener("compositionend", onGlobalCompositionEnd);
+}
+
+// IME guard for the many small inputs that act on Enter (rename, add, pick,
+// submit). A shared compositionend timestamp is precise enough: a 100ms
+// cross-input false positive costs one swallowed Enter, a missed send costs
+// a wrong message.
+export function isImeEvent(e: { nativeEvent: { isComposing?: boolean; keyCode?: number } }): boolean {
+  ensureGlobalCompositionListener();
+  return isImeKeyEvent(e, false, lastGlobalCompositionEndAt);
+}
