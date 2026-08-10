@@ -7,10 +7,9 @@ import (
 	"reasonix/internal/tool"
 )
 
-// chatRunRoundLimit bounds one ordinary chat Run. Crossing it yields one
-// tool-free summary and a resumable pause. 0 disables the default ceiling
-// entirely (the run loop only caps when runMaxSteps > 0), which this
-// personal dev build uses to avoid mid-task pauses.
+// chatRunRoundLimit bounds one ordinary chat Run; 0 disables the ceiling. The
+// personal dev build disables both turn ceilings; the end state is an upstream
+// config key the installed instance's user sets.
 const (
 	chatRunRoundLimit = 0
 	chatRunRoundKey   = "chat model rounds"

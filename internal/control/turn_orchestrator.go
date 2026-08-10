@@ -23,8 +23,11 @@ type turnOrchestrator struct {
 	c *Controller
 }
 
+// goalRunRoundLimit bounds one Goal turn; 0 disables the ceiling. The personal
+// dev build disables both turn ceilings; the end state is an upstream config
+// key the installed instance's user sets.
 const (
-	goalRunRoundLimit = 16
+	goalRunRoundLimit = 0
 	goalRunRoundKey   = "goal model rounds"
 )
 
